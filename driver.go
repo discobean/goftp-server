@@ -19,6 +19,12 @@ type Driver interface {
 	// Init init
 	Init(*Conn)
 
+	// params  - the username that just authenticated successfuly,
+	//         - but before actually logging into the server
+	// returns - bool whether the user should continue to login or not
+	//         - an error if the login cannot be processed
+	Login(string) (bool, error)
+
 	// params  - a file path
 	// returns - a time indicating when the requested path was last modified
 	//         - an error if the file doesn't exist or the user lacks

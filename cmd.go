@@ -606,19 +606,28 @@ func (cmd commandPass) RequireAuth() bool {
 }
 
 func (cmd commandPass) Execute(conn *Conn, param string) {
-	ok, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
+	checkPasswdOk, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
 	if err != nil {
 		conn.writeMessage(550, "Checking password error")
 		return
 	}
 
-	if ok {
-		conn.user = conn.reqUser
-		conn.reqUser = ""
-		conn.writeMessage(230, "Password ok, continue")
-	} else {
-		conn.writeMessage(530, "Incorrect password, not logged in")
+	if checkPasswdOk {
+		driverLoginOk, err := conn.driver.Login(conn.reqUser)
+		if err != nil {
+			conn.writeMessage(550, err.Error())
+			return
+		}
+
+		if driverLoginOk {
+			conn.user = conn.reqUser
+			conn.reqUser = ""
+			conn.writeMessage(230, "Password ok, continue")
+			return
+		}
 	}
+
+	conn.writeMessage(530, "Incorrect password, not logged in")
 }
 
 // commandPasv responds to the PASV FTP command.
