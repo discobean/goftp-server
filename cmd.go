@@ -38,6 +38,7 @@ var (
 		"FEAT": commandFeat{},
 		"LIST": commandList{},
 		"LPRT": commandLprt{},
+		"LPSV": commandLpsv{},
 		"NLST": commandNlst{},
 		"MDTM": commandMdtm{},
 		"MIC":  commandMic{},
@@ -346,6 +347,50 @@ func (cmd commandLprt) Execute(conn *Conn, param string) {
 	}
 	conn.dataConn = socket
 	conn.writeMessage(200, "Connection established ("+strconv.Itoa(port)+")")
+}
+
+// commandLpsv responds to the LPSV FTP command. It allows the client to
+// request a passive data socket with more options than the original PASV
+// command. It mainly adds ipv6 support, although we don't support that yet.
+type commandLpsv struct{}
+
+func (cmd commandLpsv) IsExtend() bool {
+	return true
+}
+
+func (cmd commandLpsv) RequireParam() bool {
+	return false
+}
+
+func (cmd commandLpsv) RequireAuth() bool {
+	return true
+}
+
+func (cmd commandLpsv) Execute(conn *Conn, param string) {
+	addr := conn.passiveListenIP()
+	lastIdx := strings.LastIndex(addr, ":")
+	if lastIdx <= 0 {
+		conn.writeMessage(425, "Data connection failed")
+		return
+	}
+
+	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig)
+	if err != nil {
+		log.Println(err)
+		conn.writeMessage(425, "Data connection failed")
+		return
+	}
+
+	splitAddr := strings.Split(addr, ".")
+
+	portBytes := make([]byte, 2)
+	binary.LittleEndian.PutUint16(portBytes, uint16(socket.Port()))
+
+	conn.dataConn = socket
+	msg := fmt.Sprintf("Entering Long Passive Mode (4, 4, %s, %s, %s, %s, 2, %d, %d)",
+		splitAddr[0], splitAddr[1], splitAddr[2], splitAddr[3], portBytes[0], portBytes[1])
+
+	conn.writeMessage(228, msg)
 }
 
 // commandEpsv responds to the EPSV FTP command. It allows the client to
