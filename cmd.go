@@ -381,7 +381,7 @@ func (cmd commandLpsv) Execute(conn *Conn, param string) {
 		return
 	}
 
-	splitAddr := strings.Split(addr, ".")
+	splitAddr := strings.Split(addr[:lastIdx], ".")
 
 	portBytes := make([]byte, 2)
 	binary.LittleEndian.PutUint16(portBytes, uint16(socket.Port()))
