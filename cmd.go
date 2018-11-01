@@ -1039,7 +1039,7 @@ func (cmd commandPbsz) RequireAuth() bool {
 }
 
 func (cmd commandPbsz) Execute(conn *Conn, param string) {
-	if conn.tls && param == "0" {
+	if conn.IsTLS() && param == "0" {
 		conn.writeMessage(200, "OK")
 	} else {
 		conn.writeMessage(550, "Action not taken")
@@ -1061,9 +1061,9 @@ func (cmd commandProt) RequireAuth() bool {
 }
 
 func (cmd commandProt) Execute(conn *Conn, param string) {
-	if conn.tls && param == "P" {
+	if conn.IsTLS() && param == "P" {
 		conn.writeMessage(200, "OK")
-	} else if conn.tls {
+	} else if conn.IsTLS() {
 		conn.writeMessage(536, "Only P level is supported")
 	} else {
 		conn.writeMessage(550, "Action not taken")

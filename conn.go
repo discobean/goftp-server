@@ -45,6 +45,10 @@ type Conn struct {
 	tls           bool
 }
 
+func (conn *Conn) IsTLS() bool {
+	return (conn.tls || conn.tlsConfig != nil)
+}
+
 func (conn *Conn) LoginUser() string {
 	return conn.user
 }
