@@ -374,7 +374,7 @@ func (cmd commandLpsv) Execute(conn *Conn, param string) {
 		return
 	}
 
-	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig)
+	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
 		log.Println(err)
 		conn.writeMessage(425, "Data connection failed")
@@ -418,7 +418,7 @@ func (cmd commandEpsv) Execute(conn *Conn, param string) {
 		return
 	}
 
-	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig)
+	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
 		log.Println(err)
 		conn.writeMessage(425, "Data connection failed")
@@ -701,7 +701,7 @@ func (cmd commandPasv) Execute(conn *Conn, param string) {
 		conn.writeMessage(425, "Data connection failed")
 		return
 	}
-	socket, err := newPassiveSocket(listenIP[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig)
+	socket, err := newPassiveSocket(listenIP[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
 		conn.writeMessage(425, "Data connection failed")
 		return
@@ -1250,10 +1250,5 @@ func (cmd commandUser) RequireAuth() bool {
 func (cmd commandUser) Execute(conn *Conn, param string) {
 	conn.reqUser = param
 
-	// Unsecured login should allowed if connecting via implicit FTP
-	if conn.tls || conn.tlsConfig == nil || !conn.server.ExplicitFTPS {
-		conn.writeMessage(331, "User name ok, password required")
-	} else {
-		conn.writeMessage(534, "Unsecured login not allowed. AUTH TLS required")
-	}
+	conn.writeMessage(331, "User name ok, password required")
 }

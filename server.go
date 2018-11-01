@@ -68,13 +68,14 @@ type ServerOpts struct {
 // Always use the NewServer() method to create a new Server.
 type Server struct {
 	*ServerOpts
-	listenTo  string
-	logger    Logger
-	listener  net.Listener
-	tlsConfig *tls.Config
-	ctx       context.Context
-	cancel    context.CancelFunc
-	feats     string
+	listenTo    string
+	logger      Logger
+	listener    net.Listener
+	tlsConfig   *tls.Config
+	ctx         context.Context
+	cancel      context.CancelFunc
+	feats       string
+	implicitTLS bool
 }
 
 // ErrServerClosed is returned by ListenAndServe() or Serve() when a shutdown
@@ -173,6 +174,7 @@ func (server *Server) newConn(tcpConn net.Conn, driver Driver) *Conn {
 	c.sessionID = newSessionID()
 	c.logger = server.logger
 	c.tlsConfig = server.tlsConfig
+	c.tls = server.implicitTLS
 
 	driver.Init(c)
 	return c
@@ -217,6 +219,7 @@ func (server *Server) ListenAndServe() error {
 		if server.ServerOpts.ExplicitFTPS {
 			listener, err = net.Listen("tcp", server.listenTo)
 		} else {
+			server.implicitTLS = true
 			listener, err = tls.Listen("tcp", server.listenTo, server.tlsConfig)
 		}
 	} else {
