@@ -1249,7 +1249,9 @@ func (cmd commandUser) RequireAuth() bool {
 
 func (cmd commandUser) Execute(conn *Conn, param string) {
 	conn.reqUser = param
-	if conn.tls || conn.tlsConfig == nil {
+
+	// Unsecured login should allowed if connecting via implicit FTP
+	if conn.tls || conn.tlsConfig == nil || !conn.server.ExplicitFTPS {
 		conn.writeMessage(331, "User name ok, password required")
 	} else {
 		conn.writeMessage(534, "Unsecured login not allowed. AUTH TLS required")
