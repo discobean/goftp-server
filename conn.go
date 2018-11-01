@@ -186,7 +186,7 @@ func (conn *Conn) writeMessage(code int, message string) (wrote int, err error) 
 // writeMessage will send a standard FTP response back to the client.
 func (conn *Conn) writeMessageMultiline(code int, message string) (wrote int, err error) {
 	conn.logger.PrintResponse(conn.sessionID, code, message)
-	line := fmt.Sprintf("%d-%s\r\n%d END\r\n", code, message, code)
+	line := fmt.Sprintf("%d-%s\r\n%d END\r\n", code, strings.TrimRight(message, "\r\n "), code)
 	wrote, err = conn.controlWriter.WriteString(line)
 	conn.controlWriter.Flush()
 	return

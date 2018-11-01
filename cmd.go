@@ -159,14 +159,14 @@ func (cmd commandFeat) RequireAuth() bool {
 }
 
 var (
-	feats    = "Extensions supported:\n%s"
-	featCmds = " UTF8\n"
+	feats    = "Extensions supported:\r\n%s"
+	featCmds = " UTF8\r\n"
 )
 
 func init() {
 	for k, v := range commands {
 		if v.IsExtend() {
-			featCmds = featCmds + " " + k + "\n"
+			featCmds = featCmds + " " + k + "\r\n"
 		}
 	}
 }

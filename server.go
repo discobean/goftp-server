@@ -212,7 +212,7 @@ func (server *Server) ListenAndServe() error {
 			return err
 		}
 
-		curFeats += " AUTH TLS\n PBSZ\n PROT\n"
+		curFeats += " AUTH TLS\r\n PBSZ\r\n PROT\r\n"
 
 		if server.ServerOpts.ExplicitFTPS {
 			listener, err = net.Listen("tcp", server.listenTo)
