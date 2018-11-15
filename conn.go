@@ -45,6 +45,10 @@ type Conn struct {
 	tls           bool
 }
 
+func (conn *Conn) RemoteAddr() net.Addr {
+	return conn.conn.RemoteAddr()
+}
+
 func (conn *Conn) IsTLS() bool {
 	return (conn.tls || conn.tlsConfig != nil)
 }
