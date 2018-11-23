@@ -45,6 +45,10 @@ type Conn struct {
 	tls           bool
 }
 
+func (conn *Conn) SessionID() string {
+	return conn.sessionID
+}
+
 func (conn *Conn) RemoteAddr() net.Addr {
 	return conn.conn.RemoteAddr()
 }
