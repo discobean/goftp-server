@@ -19,6 +19,12 @@ type Driver interface {
 	// Init init
 	Init(*Conn)
 
+	// params  - the username that is about to authenticate,
+	//         - but before actually authenticating with Auth backend
+	// returns - bool whether the user should continue to login or not
+	//         - an error if the login cannot be processed
+	CheckUser(string) (bool, error)
+
 	// params  - the username that just authenticated successfuly,
 	//         - but before actually logging into the server
 	// returns - bool whether the user should continue to login or not

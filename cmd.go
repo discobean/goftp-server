@@ -652,6 +652,17 @@ func (cmd commandPass) RequireAuth() bool {
 }
 
 func (cmd commandPass) Execute(conn *Conn, param string) {
+	checkUserOk, err := conn.driver.CheckUser(conn.reqUser)
+	if err != nil {
+		conn.writeMessage(550, "Checking username error")
+		return
+	}
+
+	if !checkUserOk {
+		conn.writeMessage(530, "Login not allowed, not logged in")
+		return
+	}
+
 	checkPasswdOk, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
 	if err != nil {
 		conn.writeMessage(550, "Checking password error")
