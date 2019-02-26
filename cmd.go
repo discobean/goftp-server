@@ -100,7 +100,7 @@ func (cmd commandAppe) IsExtend() bool {
 }
 
 func (cmd commandAppe) RequireParam() bool {
-	return false
+	return true
 }
 
 func (cmd commandAppe) RequireAuth() bool {
@@ -108,8 +108,20 @@ func (cmd commandAppe) RequireAuth() bool {
 }
 
 func (cmd commandAppe) Execute(conn *Conn, param string) {
-	conn.appendData = true
-	conn.writeMessage(202, "Obsolete")
+	targetPath := conn.buildPath(param)
+	conn.writeMessage(150, "Data transfer starting")
+
+	defer func() {
+		conn.appendData = false
+	}()
+
+	bytes, err := conn.driver.AppendFile(targetPath, conn.dataConn, conn.appendData)
+	if err == nil {
+		msg := "OK, received " + strconv.Itoa(int(bytes)) + " bytes"
+		conn.writeMessage(226, msg)
+	} else {
+		conn.writeMessage(450, fmt.Sprint("error during transfer: ", err))
+	}
 }
 
 type commandOpts struct{}
