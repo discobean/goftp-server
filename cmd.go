@@ -7,7 +7,6 @@ package server
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 )
@@ -388,7 +387,7 @@ func (cmd commandLpsv) Execute(conn *Conn, param string) {
 
 	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
-		log.Println(err)
+		conn.logger.Printf(conn.sessionID, "LPSV Passive connection failed: %v\n", err)
 		conn.writeMessage(425, "Data connection failed")
 		return
 	}
@@ -432,7 +431,7 @@ func (cmd commandEpsv) Execute(conn *Conn, param string) {
 
 	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
-		log.Println(err)
+		conn.logger.Printf(conn.sessionID, "EPSV Passive connection failed: %v\n", err)
 		conn.writeMessage(425, "Data connection failed")
 		return
 	}
@@ -1134,7 +1133,7 @@ func (cmd commandSize) Execute(conn *Conn, param string) {
 	path := conn.buildPath(param)
 	stat, err := conn.driver.Stat(path)
 	if err != nil {
-		log.Printf("Size: error(%s)", err)
+		conn.logger.Printf(conn.sessionID, "Error stat size: %v\n", err)
 		conn.writeMessage(450, fmt.Sprint("path", path, "not found"))
 	} else {
 		conn.writeMessage(213, strconv.Itoa(int(stat.Size())))
