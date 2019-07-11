@@ -4,6 +4,10 @@
 
 package server
 
+import (
+	"crypto/subtle"
+)
+
 // Permissions is a map name value pair to store users data
 // upon successful login.
 type Permissions map[string]string
@@ -25,8 +29,9 @@ type SimpleAuth struct {
 
 // CheckPasswd will check user's password
 func (a *SimpleAuth) CheckPasswd(name, pass string) (bool, *Permissions, error) {
-	if name != a.Name || pass != a.Password {
-		return false, nil, nil
-	}
-	return true, nil, nil
+	return constantTimeEquals(name, a.Name) && constantTimeEquals(pass, a.Password), nil, nil
+}
+
+func constantTimeEquals(a, b string) bool {
+	return len(a) == len(b) && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
