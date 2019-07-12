@@ -424,16 +424,10 @@ func (cmd commandEpsv) RequireAuth() bool {
 
 func (cmd commandEpsv) Execute(conn *Conn, param string) {
 	addr := conn.passiveListenIP()
-	lastIdx := strings.LastIndex(addr, ":")
-	if lastIdx <= 0 {
-		conn.writeMessage(425, "Data connection failed: invalid passive listen ip:port")
-		return
-	}
-
-	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
+	socket, err := newPassiveSocket(addr, conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
-		conn.logger.Printf(conn.sessionID, "EPSV Passive connection failed: %v\n", err.Error())
-		conn.writeMessage(425, fmt.Sprint("Data connection failed: ", err.Error()))
+		logrus.WithError(err).Errorf("EPSV Passive connection failed to create socket")
+		conn.writeMessage(425, "Data connection failed")
 		return
 	}
 	conn.dataConn = socket
@@ -756,12 +750,7 @@ func (cmd commandPasv) RequireAuth() bool {
 
 func (cmd commandPasv) Execute(conn *Conn, param string) {
 	listenIP := conn.passiveListenIP()
-	lastIdx := strings.LastIndex(listenIP, ":")
-	if lastIdx <= 0 {
-		conn.writeMessage(425, "Data connection failed: invalid passive listen ip:port")
-		return
-	}
-	socket, err := newPassiveSocket(listenIP[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
+	socket, err := newPassiveSocket(listenIP, conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
 		conn.writeMessage(425, fmt.Sprint("Data connection failed: ", err.Error()))
 		return
@@ -769,7 +758,7 @@ func (cmd commandPasv) Execute(conn *Conn, param string) {
 	conn.dataConn = socket
 	p1 := socket.Port() / 256
 	p2 := socket.Port() - (p1 * 256)
-	quads := strings.Split(listenIP[:lastIdx], ".")
+	quads := strings.Split(listenIP, ".")
 	target := fmt.Sprintf("(%s,%s,%s,%s,%d,%d)", quads[0], quads[1], quads[2], quads[3], p1, p2)
 	msg := "Entering Passive Mode " + target
 	conn.writeMessage(227, msg)
