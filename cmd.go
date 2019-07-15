@@ -119,7 +119,7 @@ func (cmd commandAppe) Execute(conn *Conn, param string) {
 		msg := "OK, received " + strconv.Itoa(int(bytes)) + " bytes"
 		conn.writeMessage(226, msg)
 	} else {
-		conn.writeMessage(450, fmt.Sprint("error during transfer: ", err))
+		conn.writeMessage(450, fmt.Sprint("error during transfer: ", err.Error()))
 	}
 }
 
@@ -140,11 +140,11 @@ func (cmd commandOpts) RequireAuth() bool {
 func (cmd commandOpts) Execute(conn *Conn, param string) {
 	parts := strings.Fields(param)
 	if len(parts) != 2 {
-		conn.writeMessage(550, "Unknow params")
+		conn.writeMessage(550, "Unknown params")
 		return
 	}
 	if strings.ToUpper(parts[0]) != "UTF8" {
-		conn.writeMessage(550, "Unknow params")
+		conn.writeMessage(550, "Unknown params")
 		return
 	}
 
@@ -231,7 +231,7 @@ func (cmd commandCwd) Execute(conn *Conn, param string) {
 		conn.namePrefix = path
 		conn.writeMessage(250, "Directory changed to "+path)
 	} else {
-		conn.writeMessage(550, fmt.Sprint("Directory change to ", path, " failed: ", err))
+		conn.writeMessage(550, fmt.Sprint("Directory change to ", path, " failed: ", err.Error()))
 	}
 }
 
@@ -257,7 +257,7 @@ func (cmd commandDele) Execute(conn *Conn, param string) {
 	if err == nil {
 		conn.writeMessage(250, "File deleted")
 	} else {
-		conn.writeMessage(550, fmt.Sprint("File delete failed: ", err))
+		conn.writeMessage(550, fmt.Sprint("File delete failed: ", err.Error()))
 	}
 }
 
@@ -290,7 +290,7 @@ func (cmd commandEprt) Execute(conn *Conn, param string) {
 	}
 	socket, err := newActiveSocket(host, port, conn.logger, conn.sessionID)
 	if err != nil {
-		conn.writeMessage(425, "Data connection failed")
+		conn.writeMessage(425, fmt.Sprint("Data connection failed: ", err.Error()))
 		return
 	}
 	conn.dataConn = socket
@@ -353,7 +353,7 @@ func (cmd commandLprt) Execute(conn *Conn, param string) {
 
 	socket, err := newActiveSocket(host, port, conn.logger, conn.sessionID)
 	if err != nil {
-		conn.writeMessage(425, "Data connection failed")
+		conn.writeMessage(425, fmt.Sprint("Data connection failed: ", err.Error()))
 		return
 	}
 	conn.dataConn = socket
@@ -381,14 +381,14 @@ func (cmd commandLpsv) Execute(conn *Conn, param string) {
 	addr := conn.passiveListenIP()
 	lastIdx := strings.LastIndex(addr, ":")
 	if lastIdx <= 0 {
-		conn.writeMessage(425, "Data connection failed")
+		conn.writeMessage(425, "Data connection failed: invalid passive listen ip:port")
 		return
 	}
 
 	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
-		conn.logger.Printf(conn.sessionID, "LPSV Passive connection failed: %v\n", err)
-		conn.writeMessage(425, "Data connection failed")
+		conn.logger.Printf(conn.sessionID, "LPSV Passive connection failed: %v\n", err.Error())
+		conn.writeMessage(425, fmt.Sprint("Data connection failed: ", err.Error()))
 		return
 	}
 
@@ -425,14 +425,14 @@ func (cmd commandEpsv) Execute(conn *Conn, param string) {
 	addr := conn.passiveListenIP()
 	lastIdx := strings.LastIndex(addr, ":")
 	if lastIdx <= 0 {
-		conn.writeMessage(425, "Data connection failed")
+		conn.writeMessage(425, "Data connection failed: invalid passive listen ip:port")
 		return
 	}
 
 	socket, err := newPassiveSocket(addr[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
-		conn.logger.Printf(conn.sessionID, "EPSV Passive connection failed: %v\n", err)
-		conn.writeMessage(425, "Data connection failed")
+		conn.logger.Printf(conn.sessionID, "EPSV Passive connection failed: %v\n", err.Error())
+		conn.writeMessage(425, fmt.Sprint("Data connection failed: ", err.Error()))
 		return
 	}
 	conn.dataConn = socket
@@ -566,7 +566,7 @@ func (cmd commandMdtm) Execute(conn *Conn, param string) {
 	if err == nil {
 		conn.writeMessage(213, stat.ModTime().Format("20060102150405"))
 	} else {
-		conn.writeMessage(450, "File not available")
+		conn.writeMessage(450, fmt.Sprint("File not available: ", err.Error()))
 	}
 }
 
@@ -592,7 +592,7 @@ func (cmd commandMkd) Execute(conn *Conn, param string) {
 	if err == nil {
 		conn.writeMessage(257, "Directory created")
 	} else {
-		conn.writeMessage(550, fmt.Sprint("Action not taken: ", err))
+		conn.writeMessage(550, fmt.Sprint("Action not taken: ", err.Error()))
 	}
 }
 
@@ -665,7 +665,7 @@ func (cmd commandPass) RequireAuth() bool {
 func (cmd commandPass) Execute(conn *Conn, param string) {
 	checkUserOk, err := conn.driver.CheckUser(conn.reqUser)
 	if err != nil {
-		conn.writeMessage(550, "Checking username error")
+		conn.writeMessage(550, fmt.Sprint("Checking username error: ", err.Error()))
 		return
 	}
 
@@ -676,7 +676,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 
 	checkPasswdOk, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
 	if err != nil {
-		conn.writeMessage(550, "Checking password error")
+		conn.writeMessage(550, fmt.Sprint("Checking password error: ", err.Error()))
 		return
 	}
 
@@ -720,12 +720,12 @@ func (cmd commandPasv) Execute(conn *Conn, param string) {
 	listenIP := conn.passiveListenIP()
 	lastIdx := strings.LastIndex(listenIP, ":")
 	if lastIdx <= 0 {
-		conn.writeMessage(425, "Data connection failed")
+		conn.writeMessage(425, "Data connection failed: invalid passive listen ip:port")
 		return
 	}
 	socket, err := newPassiveSocket(listenIP[:lastIdx], conn.PassivePort, conn.logger, conn.sessionID, conn.tlsConfig, conn.tls)
 	if err != nil {
-		conn.writeMessage(425, "Data connection failed")
+		conn.writeMessage(425, fmt.Sprint("Data connection failed: ", err.Error()))
 		return
 	}
 	conn.dataConn = socket
@@ -763,7 +763,7 @@ func (cmd commandPort) Execute(conn *Conn, param string) {
 	host := nums[0] + "." + nums[1] + "." + nums[2] + "." + nums[3]
 	socket, err := newActiveSocket(host, port, conn.logger, conn.sessionID)
 	if err != nil {
-		conn.writeMessage(425, "Data connection failed")
+		conn.writeMessage(425, fmt.Sprint("Data connection failed: ", err.Error()))
 		return
 	}
 	conn.dataConn = socket
@@ -843,7 +843,7 @@ func (cmd commandRetr) Execute(conn *Conn, param string) {
 			conn.writeMessage(551, "Error reading file")
 		}
 	} else {
-		conn.writeMessage(551, "File not available")
+		conn.writeMessage(551, fmt.Sprint("File not available: ", err.Error()))
 	}
 }
 
@@ -865,7 +865,7 @@ func (cmd commandRest) Execute(conn *Conn, param string) {
 	var err error
 	conn.lastFilePos, err = strconv.ParseInt(param, 10, 64)
 	if err != nil {
-		conn.writeMessage(551, "File not available")
+		conn.writeMessage(551, fmt.Sprint("File not available: ", err.Error()))
 		return
 	}
 
@@ -921,7 +921,7 @@ func (cmd commandRnto) Execute(conn *Conn, param string) {
 	if err == nil {
 		conn.writeMessage(250, "File renamed")
 	} else {
-		conn.writeMessage(550, fmt.Sprint("Action not taken: ", err))
+		conn.writeMessage(550, fmt.Sprint("Action not taken: ", err.Error()))
 	}
 }
 
@@ -947,7 +947,7 @@ func (cmd commandRmd) Execute(conn *Conn, param string) {
 	if err == nil {
 		conn.writeMessage(250, "Directory deleted")
 	} else {
-		conn.writeMessage(550, fmt.Sprint("Directory delete failed: ", err))
+		conn.writeMessage(550, fmt.Sprint("Directory delete failed: ", err.Error()))
 	}
 }
 
@@ -1133,8 +1133,8 @@ func (cmd commandSize) Execute(conn *Conn, param string) {
 	path := conn.buildPath(param)
 	stat, err := conn.driver.Stat(path)
 	if err != nil {
-		conn.logger.Printf(conn.sessionID, "Error stat size: %v\n", err)
-		conn.writeMessage(450, fmt.Sprint("path", path, "not found"))
+		conn.logger.Printf(conn.sessionID, "Error stat size: %v\n", err.Error())
+		conn.writeMessage(450, fmt.Sprint("path ", path, " not found: ", err.Error()))
 	} else {
 		conn.writeMessage(213, strconv.Itoa(int(stat.Size())))
 	}
@@ -1169,7 +1169,7 @@ func (cmd commandStor) Execute(conn *Conn, param string) {
 		msg := "OK, received " + strconv.Itoa(int(bytes)) + " bytes"
 		conn.writeMessage(226, msg)
 	} else {
-		conn.writeMessage(450, fmt.Sprint("error during transfer: ", err))
+		conn.writeMessage(450, fmt.Sprint("error during transfer: ", err.Error()))
 	}
 }
 
