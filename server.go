@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"github.com/sirupsen/logrus"
 )
 
 // Version returns the library version
@@ -60,6 +61,9 @@ type ServerOpts struct {
 
 	// A logger implementation, if nil the StdLogger is used
 	Logger Logger
+
+	// A logrus logger for logging authentication requests and more
+	LogrusEntry *logrus.Entry
 }
 
 // Server is the root of your FTP application. You should instantiate one
@@ -70,6 +74,7 @@ type Server struct {
 	*ServerOpts
 	listenTo    string
 	logger      Logger
+	logrusEntry *logrus.Entry
 	listener    net.Listener
 	tlsConfig   *tls.Config
 	ctx         context.Context
@@ -121,6 +126,11 @@ func serverOptsWithDefaults(opts *ServerOpts) *ServerOpts {
 		newOpts.Logger = opts.Logger
 	}
 
+	newOpts.LogrusEntry = logrus.NewEntry(logrus.New())
+	if opts.LogrusEntry != nil {
+		newOpts.LogrusEntry = opts.LogrusEntry
+	}
+
 	newOpts.TLS = opts.TLS
 	newOpts.KeyFile = opts.KeyFile
 	newOpts.CertFile = opts.CertFile
@@ -155,6 +165,7 @@ func NewServer(opts *ServerOpts) *Server {
 	s.ServerOpts = opts
 	s.listenTo = net.JoinHostPort(opts.Hostname, strconv.Itoa(opts.Port))
 	s.logger = opts.Logger
+	s.logrusEntry = opts.LogrusEntry
 	return s
 }
 
@@ -173,6 +184,8 @@ func (server *Server) newConn(tcpConn net.Conn, driver Driver) *Conn {
 	c.server = server
 	c.sessionID = newSessionID()
 	c.logger = server.logger
+	sourceIP, _, _ := net.SplitHostPort(tcpConn.RemoteAddr().String())
+	c.logrusEntry = server.logrusEntry.WithField("source_ip", sourceIP)
 	c.tlsConfig = server.tlsConfig
 	c.tls = server.implicitTLS
 

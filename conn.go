@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -32,6 +33,7 @@ type Conn struct {
 	driver        Driver
 	auth          Auth
 	logger        Logger
+	logrusEntry  *logrus.Entry
 	server        *Server
 	tlsConfig     *tls.Config
 	sessionID     string

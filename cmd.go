@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"errors"
 )
 
 type Command interface {
@@ -665,18 +666,24 @@ func (cmd commandPass) RequireAuth() bool {
 func (cmd commandPass) Execute(conn *Conn, param string) {
 	checkUserOk, err := conn.driver.CheckUser(conn.reqUser)
 	if err != nil {
-		conn.writeMessage(550, fmt.Sprint("Checking username error: ", err.Error()))
+		message := fmt.Sprint("Checking username error: ", err.Error())
+		conn.writeMessage(550, message)
+		conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")
 		return
 	}
 
 	if !checkUserOk {
-		conn.writeMessage(530, "Login not allowed, not logged in")
+		message := "Login not allowed, not logged in"
+		conn.writeMessage(530, message)
+		conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")
 		return
 	}
 
 	checkPasswdOk, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
 	if err != nil {
-		conn.writeMessage(550, fmt.Sprint("Checking password error: ", err.Error()))
+		message := fmt.Sprint("Checking password error: ", err.Error())
+		conn.writeMessage(550, message)
+		conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")
 		return
 	}
 
@@ -695,7 +702,10 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 		}
 	}
 
-	conn.writeMessage(530, "Incorrect password, not logged in")
+	conn.server.logger.Print("test", "test")
+	message := "Incorrect password, not logged in"
+	conn.writeMessage(530, message)
+	conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")
 }
 
 // commandPasv responds to the PASV FTP command.
