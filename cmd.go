@@ -6,10 +6,10 @@ package server
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-	"errors"
 )
 
 type Command interface {
@@ -688,7 +688,14 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 	}
 
 	if checkPasswdOk {
-		driverLoginOk, err := conn.driver.Login(conn.reqUser)
+		driverLoginOk, logrusLogger, connLogger, err := conn.driver.Login(conn.reqUser)
+		if logrusLogger != nil {
+			conn.logrusEntry = logrusLogger
+		}
+		if connLogger != nil {
+			conn.logger = connLogger
+		}
+
 		if err != nil {
 			conn.writeMessage(550, err.Error())
 			return
@@ -700,9 +707,9 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 			conn.writeMessage(230, "Password ok, continue")
 			return
 		}
+
 	}
 
-	conn.server.logger.Print("test", "test")
 	message := "Incorrect password, not logged in"
 	conn.writeMessage(530, message)
 	conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")

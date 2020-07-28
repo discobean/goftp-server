@@ -4,7 +4,10 @@
 
 package server
 
-import "io"
+import (
+	"github.com/sirupsen/logrus"
+	"io"
+)
 
 // DriverFactory is a driver factory to create driver. For each client that connects to the server, a new FTPDriver is required.
 // Create an implementation if this interface and provide it to FTPServer.
@@ -28,8 +31,9 @@ type Driver interface {
 	// params  - the username that just authenticated successfuly,
 	//         - but before actually logging into the server
 	// returns - bool whether the user should continue to login or not
+	//         - logrus.Entry that should be used for logging information for this connection
 	//         - an error if the login cannot be processed
-	Login(string) (bool, error)
+	Login(string) (bool, *logrus.Entry, Logger, error)
 
 	// params  - a file path
 	// returns - a time indicating when the requested path was last modified
