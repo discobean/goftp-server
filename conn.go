@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"log"
 	mrand "math/rand"
@@ -18,7 +19,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -33,7 +33,7 @@ type Conn struct {
 	driver        Driver
 	auth          Auth
 	logger        Logger
-	logrusEntry  *logrus.Entry
+	logrusEntry   *logrus.Entry
 	server        *Server
 	tlsConfig     *tls.Config
 	sessionID     string
@@ -53,6 +53,13 @@ func (conn *Conn) SessionID() string {
 
 func (conn *Conn) RemoteAddr() net.Addr {
 	return conn.conn.RemoteAddr()
+}
+
+// Returns true if connection has been upgraded explicitly to FTP/S,
+// or connection is implicit FTP/s
+// Returns false if connection is just regular plain FTP
+func (conn *Conn) IsConnectionSecure() bool {
+	return conn.tls
 }
 
 func (conn *Conn) IsTLS() bool {
