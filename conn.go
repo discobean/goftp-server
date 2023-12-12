@@ -258,6 +258,12 @@ func (conn *Conn) sendOutofbandData(data []byte) {
 
 func (conn *Conn) sendOutofBandDataWriter(data io.ReadCloser) error {
 	conn.lastFilePos = 0
+	if conn.dataConn == nil {
+		conn.writeMessage(226, "Data connection not available")
+		// return a new error with the data connection message
+		return fmt.Errorf("data connection not available")
+	}
+
 	bytes, err := io.Copy(conn.dataConn, data)
 	if err != nil {
 		conn.dataConn.Close()
