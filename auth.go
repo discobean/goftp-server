@@ -6,7 +6,7 @@ package server
 
 // Auth is an interface to auth your ftp user login.
 type Auth interface {
-	CheckPasswd(string, string) (bool, error)
+	CheckPasswd(string, string) (bool, string, error)
 }
 
 var (
@@ -20,9 +20,9 @@ type SimpleAuth struct {
 }
 
 // CheckPasswd will check user's password
-func (a *SimpleAuth) CheckPasswd(name, pass string) (bool, error) {
+func (a *SimpleAuth) CheckPasswd(name, pass string) (bool, string, error) {
 	if name != a.Name || pass != a.Password {
-		return false, nil
+		return false, "", nil
 	}
-	return true, nil
+	return true, "", nil
 }
