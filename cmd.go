@@ -669,14 +669,14 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 	if err != nil {
 		message := fmt.Sprint("Checking username error: ", err.Error())
 		conn.writeMessage(550, message)
-		conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")
+		conn.logrusEntry.WithField("username", conn.reqUser).WithError(errors.New(message)).Info("Login failed, a1")
 		return
 	}
 
 	if !checkUserOk {
 		message := "Login not allowed, not logged in"
 		conn.writeMessage(530, message)
-		conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")
+		conn.logrusEntry.WithField("username", conn.reqUser).WithError(errors.New(message)).Info("Login failed, a2")
 		return
 	}
 
@@ -684,7 +684,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 	if err != nil {
 		message := fmt.Sprint("Checking password error: ", err.Error())
 		conn.writeMessage(550, message)
-		conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")
+		conn.logrusEntry.WithField("username", conn.reqUser).WithError(errors.New(message)).Info("Login failed, a3")
 		return
 	}
 
@@ -713,7 +713,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 
 	message := "Incorrect password, not logged in"
 	conn.writeMessage(530, message)
-	conn.logrusEntry.WithField("username", param).WithError(errors.New(message)).Info("Login failed")
+	conn.logrusEntry.WithField("username", conn.reqUser).WithError(errors.New(message)).Info("Login failed, a4")
 }
 
 // commandPasv responds to the PASV FTP command.
