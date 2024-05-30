@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 )
@@ -665,18 +666,18 @@ func (cmd commandPass) RequireAuth() bool {
 }
 
 func (cmd commandPass) Execute(conn *Conn, param string) {
-	checkUserOk, err := conn.driver.CheckUser(conn.reqUser)
+	checkUserOk, uuid, err := conn.driver.CheckUser(conn.reqUser)
 	if err != nil {
 		message := fmt.Sprint("Checking username error: ", err.Error())
 		conn.writeMessage(550, message)
-		conn.logrusEntry.WithField("username", conn.reqUser).WithError(errors.New(message)).Info("Login failed, a1")
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a1")
 		return
 	}
 
 	if !checkUserOk {
 		message := "Login not allowed, not logged in"
 		conn.writeMessage(530, message)
-		conn.logrusEntry.WithField("username", conn.reqUser).WithError(errors.New(message)).Info("Login failed, a2")
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a2")
 		return
 	}
 
@@ -684,7 +685,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 	if err != nil {
 		message := fmt.Sprint("Checking password error: ", err.Error())
 		conn.writeMessage(550, message)
-		conn.logrusEntry.WithField("username", conn.reqUser).WithError(errors.New(message)).Info("Login failed, a3")
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a3")
 		return
 	}
 
@@ -713,7 +714,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 
 	message := "Incorrect password, not logged in"
 	conn.writeMessage(530, message)
-	conn.logrusEntry.WithField("username", conn.reqUser).WithError(errors.New(message)).Info("Login failed, a4")
+	conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a4")
 }
 
 // commandPasv responds to the PASV FTP command.

@@ -25,8 +25,9 @@ type Driver interface {
 	// params  - the username that is about to authenticate,
 	//         - but before actually authenticating with Auth backend
 	// returns - bool whether the user should continue to login or not
+	//         - string that shows the uuid of the user (if available)
 	//         - an error if the login cannot be processed
-	CheckUser(string) (bool, error)
+	CheckUser(string) (bool, string, error)
 
 	// params  - the username that just authenticated successfuly,
 	//         - but before actually logging into the server
