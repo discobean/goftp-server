@@ -668,24 +668,24 @@ func (cmd commandPass) RequireAuth() bool {
 func (cmd commandPass) Execute(conn *Conn, param string) {
 	checkUserOk, uuid, reasonNotOk, err := conn.driver.CheckUser(conn.reqUser)
 	if err != nil {
-		message := fmt.Sprint("Error checking username: ", err.Error())
-		conn.writeMessage(550, "Error checking username") // don't give the client a reason, only log the reason
-		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a1")
+		message := fmt.Sprint("error checking username: ", err.Error())
+		conn.writeMessage(550, "error checking username") // don't give the client a reason, only log the reason
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed, a1")
 		return
 	}
 
 	if !checkUserOk {
-		message := fmt.Sprint("Login not allowed: ", reasonNotOk)
-		conn.writeMessage(530, "Login not allowed") // don't give the client a reason, only log the reason
-		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a2")
+		message := fmt.Sprint("login not allowed: ", reasonNotOk)
+		conn.writeMessage(530, "login not allowed") // don't give the client a reason, only log the reason
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed, a2")
 		return
 	}
 
 	checkPasswdOk, uuid, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
 	if err != nil {
-		message := fmt.Sprint("Error checking password: ", err.Error())
-		conn.writeMessage(550, "Error checking password") // don't give the client a reason, only log the reason
-		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a3")
+		message := fmt.Sprint("error checking password: ", err.Error())
+		conn.writeMessage(550, "error checking password") // don't give the client a reason, only log the reason
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed, a3")
 		return
 	}
 

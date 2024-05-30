@@ -10,9 +10,9 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"net"
 	"strconv"
-	"github.com/sirupsen/logrus"
 )
 
 // Version returns the library version
@@ -85,7 +85,7 @@ type Server struct {
 
 // ErrServerClosed is returned by ListenAndServe() or Serve() when a shutdown
 // was requested.
-var ErrServerClosed = errors.New("ftp: Server closed")
+var ErrServerClosed = errors.New("ftp: server closed")
 
 // serverOptsWithDefaults copies an ServerOpts struct into a new struct,
 // then adds any default values that are missing and returns the new data.
