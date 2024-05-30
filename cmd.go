@@ -681,7 +681,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 		return
 	}
 
-	checkPasswdOk, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
+	checkPasswdOk, uuid, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
 	if err != nil {
 		message := fmt.Sprint("Error checking password: ", err.Error())
 		conn.writeMessage(550, "Error checking password") // don't give the client a reason, only log the reason
