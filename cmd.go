@@ -666,7 +666,7 @@ func (cmd commandPass) RequireAuth() bool {
 }
 
 func (cmd commandPass) Execute(conn *Conn, param string) {
-	checkUserOk, uuid, err := conn.driver.CheckUser(conn.reqUser)
+	checkUserOk, uuid, reasonNotOk, err := conn.driver.CheckUser(conn.reqUser)
 	if err != nil {
 		message := fmt.Sprint("Checking username error: ", err.Error())
 		conn.writeMessage(550, message)
@@ -675,7 +675,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 	}
 
 	if !checkUserOk {
-		message := "Login not allowed, not logged in"
+		message := fmt.Sprintf("Login not allowed (%s)", reasonNotOk)
 		conn.writeMessage(530, message)
 		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a2")
 		return
