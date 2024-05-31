@@ -670,14 +670,14 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 	if err != nil {
 		message := fmt.Sprint("error checking username: ", err.Error())
 		conn.writeMessage(550, "Error checking username") // don't give the client a reason, only log the reason
-		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed, a1")
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed at a1")
 		return
 	}
 
 	if !checkUserOk {
 		message := fmt.Sprint("login not allowed: ", reasonNotOk)
 		conn.writeMessage(530, "Login not allowed") // don't give the client a reason, only log the reason
-		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed, a2")
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed at a2")
 		return
 	}
 
@@ -685,7 +685,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 	if err != nil {
 		message := fmt.Sprint("error checking password: ", err.Error())
 		conn.writeMessage(550, "Error checking password") // don't give the client a reason, only log the reason
-		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed, a3")
+		conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("login failed at a3")
 		return
 	}
 
@@ -714,7 +714,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 
 	message := "Incorrect password, not logged in"
 	conn.writeMessage(530, message)
-	conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed, a4")
+	conn.logrusEntry.WithFields(logrus.Fields{"username": conn.reqUser, "uuid": uuid}).WithError(errors.New(message)).Info("Login failed at a4")
 }
 
 // commandPasv responds to the PASV FTP command.
