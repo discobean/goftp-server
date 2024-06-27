@@ -28,14 +28,14 @@ type Driver interface {
 	//         - string that shows the uuid of the user (if available)
 	//         - string that shows the reason if the user cannot login
 	//         - an error if the login cannot be processed
-	CheckUser(string) (bool, string, string, error)
+	CheckUser(string) (bool, *Permissions, string, error)
 
 	// params  - the username that just authenticated successfuly,
 	//         - but before actually logging into the server
 	// returns - bool whether the user should continue to login or not
 	//         - logrus.Entry that should be used for logging information for this connection
 	//         - an error if the login cannot be processed
-	Login(string) (bool, *logrus.Entry, Logger, error)
+	Login(string, *Permissions) (bool, *logrus.Entry, Logger, error)
 
 	// params  - a file path
 	// returns - a time indicating when the requested path was last modified

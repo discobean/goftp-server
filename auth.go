@@ -4,9 +4,13 @@
 
 package server
 
+// Permissions is a map name value pair to store users data
+// upon successful login.
+type Permissions map[string]string
+
 // Auth is an interface to auth your ftp user login.
 type Auth interface {
-	CheckPasswd(string, string) (bool, string, error)
+	CheckPasswd(string, string) (bool, *Permissions, error)
 }
 
 var (
@@ -20,9 +24,9 @@ type SimpleAuth struct {
 }
 
 // CheckPasswd will check user's password
-func (a *SimpleAuth) CheckPasswd(name, pass string) (bool, string, error) {
+func (a *SimpleAuth) CheckPasswd(name, pass string) (bool, *Permissions, error) {
 	if name != a.Name || pass != a.Password {
-		return false, "", nil
+		return false, nil, nil
 	}
-	return true, "", nil
+	return true, nil, nil
 }
