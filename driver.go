@@ -37,6 +37,12 @@ type Driver interface {
 	//         - an error if the login cannot be processed
 	Login(string, *Permissions) (bool, *logrus.Entry, Logger, error)
 
+	// params  - the username that logged in entirely successfuly, and any perms that were generated
+	LoginSuccess(string, *Permissions)
+
+	// params  - the username that failed to login, and any perms that were generated
+	LoginFail(string, *Permissions)
+
 	// params  - a file path
 	// returns - a time indicating when the requested path was last modified
 	//         - an error if the file doesn't exist or the user lacks

@@ -666,6 +666,7 @@ func (cmd commandPass) RequireAuth() bool {
 }
 
 func (cmd commandPass) Execute(conn *Conn, param string) {
+	invalidCredentials := "Invalid credentials"
 	checkUserOk, permissions, reasonNotOk, err := conn.driver.CheckUser(conn.reqUser)
 	permissionsFields := logrus.Fields{}
 	if permissions != nil {
@@ -677,15 +678,17 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 
 	if err != nil {
 		message := fmt.Sprint("error checking username: ", err.Error())
-		conn.writeMessage(550, "Error checking username") // don't give the client a reason, only log the reason
-		conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("login failed at a1")
+		conn.writeMessage(530, invalidCredentials) // don't give the client a reason, only log the reason
+		conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("Login failed at a1")
+		conn.driver.LoginFail(conn.reqUser, permissions)
 		return
 	}
 
 	if !checkUserOk {
 		message := fmt.Sprint("login not allowed: ", reasonNotOk)
 		conn.writeMessage(530, "Login not allowed") // don't give the client a reason, only log the reason
-		conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("login failed at a2")
+		conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("Login failed at a2")
+		// No err occured, so do not log a loginFail message, this the expected outcome
 		return
 	}
 
@@ -698,9 +701,10 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 	}
 	if err != nil {
 		message := fmt.Sprint("error checking password: ", err.Error())
-		conn.writeMessage(550, "Error checking password") // don't give the client a reason, only log the reason
+		conn.writeMessage(530, invalidCredentials) // don't give the client a reason, only log the reason
 
-		conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("login failed at a3")
+		conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("Login failed at a3")
+		conn.driver.LoginFail(conn.reqUser, permissions)
 		return
 	}
 
@@ -714,7 +718,8 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 		}
 
 		if err != nil {
-			conn.writeMessage(550, err.Error())
+			conn.writeMessage(530, err.Error())
+			conn.driver.LoginFail(conn.reqUser, permissions)
 			return
 		}
 
@@ -722,14 +727,16 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 			conn.user = conn.reqUser
 			conn.reqUser = ""
 			conn.writeMessage(230, "Password ok, continue")
+			conn.driver.LoginSuccess(conn.user, permissions)
 			return
 		}
-
 	}
 
-	message := "Incorrect password, not logged in"
-	conn.writeMessage(530, message)
-	conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("Login failed at a4")
+	conn.driver.LoginFail(conn.reqUser, permissions)
+	conn.writeMessage(530, invalidCredentials)
+	conn.logrusEntry.WithFields(permissionsFields).
+		WithFields(logrus.Fields{"checkUserOk": checkUserOk, "checkPasswdOk": checkPasswdOk}).
+		WithError(errors.New("invalid credentials")).Info("Login failed at a4")
 }
 
 // commandPasv responds to the PASV FTP command.
