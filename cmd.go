@@ -667,11 +667,11 @@ func (cmd commandPass) RequireAuth() bool {
 
 func (cmd commandPass) Execute(conn *Conn, param string) {
 	invalidCredentials := "Invalid credentials"
-	checkUserOk, permissions, reasonNotOk, err := conn.driver.CheckUser(conn.reqUser)
+	checkUserOk, checkUserPermissions, reasonNotOk, err := conn.driver.CheckUser(conn.reqUser)
 	permissionsFields := logrus.Fields{}
-	if permissions != nil {
-		// iterate through all the permissions and add them to a logrus.Fields entry
-		for k, v := range *permissions {
+	if checkUserPermissions != nil {
+		// iterate through all the checkUserPermissions and add them to a logrus.Fields entry
+		for k, v := range *checkUserPermissions {
 			permissionsFields[k] = v
 		}
 	}
@@ -680,7 +680,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 		message := fmt.Sprint("error checking username: ", err.Error())
 		conn.writeMessage(530, invalidCredentials) // don't give the client a reason, only log the reason
 		conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("Login failed at a1")
-		conn.driver.LoginFail(conn.reqUser, permissions)
+		conn.driver.LoginFail(conn.reqUser, checkUserPermissions)
 		return
 	}
 
@@ -692,10 +692,10 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 		return
 	}
 
-	checkPasswdOk, perms, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
-	if permissions != nil {
-		// iterate through all the permissions and add them to a logrus.Fields entry
-		for k, v := range *permissions {
+	checkPasswdOk, checkPasswdPermissions, err := conn.server.Auth.CheckPasswd(conn.reqUser, param)
+	if checkUserPermissions != nil {
+		// iterate through all the checkUserPermissions and add them to a logrus.Fields entry
+		for k, v := range *checkUserPermissions {
 			permissionsFields[k] = v
 		}
 	}
@@ -704,12 +704,12 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 		conn.writeMessage(530, invalidCredentials) // don't give the client a reason, only log the reason
 
 		conn.logrusEntry.WithFields(permissionsFields).WithError(errors.New(message)).Info("Login failed at a3")
-		conn.driver.LoginFail(conn.reqUser, permissions)
+		conn.driver.LoginFail(conn.reqUser, checkUserPermissions)
 		return
 	}
 
 	if checkPasswdOk {
-		driverLoginOk, logrusLogger, connLogger, err := conn.driver.Login(conn.reqUser, perms)
+		driverLoginOk, logrusLogger, connLogger, err := conn.driver.Login(conn.reqUser, checkPasswdPermissions)
 		if logrusLogger != nil {
 			conn.logrusEntry = logrusLogger
 		}
@@ -719,7 +719,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 
 		if err != nil {
 			conn.writeMessage(530, err.Error())
-			conn.driver.LoginFail(conn.reqUser, permissions)
+			conn.driver.LoginFail(conn.reqUser, checkPasswdPermissions)
 			return
 		}
 
@@ -727,12 +727,12 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 			conn.user = conn.reqUser
 			conn.reqUser = ""
 			conn.writeMessage(230, "Password ok, continue")
-			conn.driver.LoginSuccess(conn.user, permissions)
+			conn.driver.LoginSuccess(conn.user, checkPasswdPermissions)
 			return
 		}
 	}
 
-	conn.driver.LoginFail(conn.reqUser, permissions)
+	conn.driver.LoginFail(conn.reqUser, checkPasswdPermissions)
 	conn.writeMessage(530, invalidCredentials)
 	conn.logrusEntry.WithFields(permissionsFields).
 		WithFields(logrus.Fields{"checkUserOk": checkUserOk, "checkPasswdOk": checkPasswdOk}).
