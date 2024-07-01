@@ -361,69 +361,6 @@ func (cmd commandLprt) Execute(conn *Conn, param string) {
 	conn.writeMessage(200, "Connection established ("+strconv.Itoa(port)+")")
 }
 
-// commandLprt responds to the LPRT FTP command. It allows the client to
-// request an active data socket with more options than the original PORT
-// command.  FTP Operation Over Big Address Records.
-type commandLprt struct{}
-
-func (cmd commandLprt) IsExtend() bool {
-	return true
-}
-
-func (cmd commandLprt) RequireParam() bool {
-	return true
-}
-
-func (cmd commandLprt) RequireAuth() bool {
-	return true
-}
-
-func (cmd commandLprt) Execute(conn *Conn, param string) {
-	// No tests for this code yet
-
-	parts := strings.Split(param, ",")
-
-	addressFamily, err := strconv.Atoi(parts[0])
-	if addressFamily != 4 {
-		conn.writeMessage(522, "Network protocol not supported, use 4")
-		return
-	}
-
-	addressLength, err := strconv.Atoi(parts[1])
-	if addressLength != 4 {
-		conn.writeMessage(522, "Network IP length not supported, use 4")
-		return
-	}
-
-	host := strings.Join(parts[2:2+addressLength], ".")
-
-	portLength, err := strconv.Atoi(parts[2+addressLength])
-	portAddress := parts[3+addressLength : 3+addressLength+portLength]
-
-	// Convert string[] to byte[]
-	portBytes := make([]byte, portLength)
-	for i := range portAddress {
-		p, _ := strconv.Atoi(portAddress[i])
-		portBytes[i] = byte(p)
-	}
-
-	// convert the bytes to an int
-	port := int(binary.BigEndian.Uint16(portBytes))
-
-	// if the existing connection is on the same host/port don't reconnect
-	if conn.dataConn.Host() == host && conn.dataConn.Port() == port {
-		return
-	}
-
-	socket, err := newActiveSocket(host, port, conn.logger, conn.sessionID)
-	if err != nil {
-		conn.writeMessage(425, "Data connection failed")
-		return
-	}
-	conn.dataConn = socket
-	conn.writeMessage(200, "Connection established ("+strconv.Itoa(port)+")")
-}
-
 // commandLpsv responds to the LPSV FTP command. It allows the client to
 // request a passive data socket with more options than the original PASV
 // command. It mainly adds ipv6 support, although we don't support that yet.
