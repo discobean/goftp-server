@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -451,8 +453,30 @@ func (cmd commandList) RequireAuth() bool {
 	return true
 }
 
+// hasMeta reports whether path contains any of the magic characters
+// recognized by Match.  (Taken from filepath.Match library)
+func hasMeta(path string) bool {
+	magicChars := `*?[`
+	if runtime.GOOS != "windows" {
+		magicChars = `*?[\`
+	}
+	return strings.ContainsAny(path, magicChars)
+}
+
 func (cmd commandList) Execute(conn *Conn, param string) {
 	path := conn.buildPath(parseListParam(param))
+
+	// split the path into the directory and the file name
+	// if the path is a directory, the file name will be empty
+	// if the path is a file, the directory will be empty
+	dirname := filepath.Dir(path)
+	basename := filepath.Base(path)
+	isWildCard := hasMeta(basename)
+
+	if isWildCard {
+		path = dirname
+	}
+
 	info, err := conn.driver.Stat(path)
 	if err != nil {
 		conn.writeMessage(550, err.Error())
@@ -466,9 +490,20 @@ func (cmd commandList) Execute(conn *Conn, param string) {
 	var files []FileInfo
 	if info.IsDir() {
 		err = conn.driver.ListDir(path, func(f FileInfo) error {
+			if isWildCard {
+				matched, err := filepath.Match(basename, f.Name())
+				if err != nil {
+					return err
+				}
+				if !matched {
+					return nil
+				}
+			}
+
 			files = append(files, f)
 			return nil
 		})
+
 		if err != nil {
 			conn.writeMessage(550, err.Error())
 			return
