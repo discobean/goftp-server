@@ -1,5 +1,5 @@
 module github.com/discobean/goftp-server
 
-go 1.14
+go 1.24
 
-require github.com/sirupsen/logrus v1.6.0
+require github.com/sirupsen/logrus v1.9.3
