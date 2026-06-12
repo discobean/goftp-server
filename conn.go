@@ -17,6 +17,7 @@ import (
 	mrand "math/rand"
 	"net"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 )
@@ -129,6 +130,16 @@ func newSessionID() string {
 // goroutine, so use this channel to be notified when the connection can be
 // cleaned up.
 func (conn *Conn) Serve() {
+	// Backstop: a panic in any command handler (e.g. a driver/storage call) must
+	// not crash the whole FTP server. Recover, log internally, and ensure the
+	// connection is closed. Per-command recovery in receiveLine handles the
+	// common case gracefully; this catches anything outside that path.
+	defer func() {
+		if r := recover(); r != nil {
+			conn.logger.Printf(conn.sessionID, "recovered panic in connection: %v\n%s", r, debug.Stack())
+			conn.Close()
+		}
+	}()
 	conn.logger.Print(conn.sessionID, "Connection Established")
 	// send welcome
 	conn.writeMessage(220, conn.server.WelcomeMessage)
@@ -191,7 +202,18 @@ func (conn *Conn) receiveLine(line string) {
 	} else if cmdObj.RequireAuth() && conn.user == "" {
 		conn.writeMessage(530, "not logged in")
 	} else {
-		cmdObj.Execute(conn, param)
+		// Recover per command so a panic in a driver/storage call fails just
+		// this operation with a clean 550 and keeps the FTP session alive,
+		// rather than crashing the server.
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					conn.logger.Printf(conn.sessionID, "recovered panic in command %s: %v\n%s", command, r, debug.Stack())
+					conn.writeMessage(550, "Action aborted, internal error")
+				}
+			}()
+			cmdObj.Execute(conn, param)
+		}()
 	}
 }
 
