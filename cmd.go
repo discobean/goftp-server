@@ -752,6 +752,16 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 		if driverLoginOk {
 			conn.user = conn.reqUser
 			conn.reqUser = ""
+			// Leave the pre-login regime at the auth transition — BEFORE the 230
+			// write and the LoginSuccess callback. We both:
+			//   - clear the deadline, so the 230 isn't bounded by the now-expired
+			//     pre-login deadline (a slow-but-successful login still delivers it), and
+			//   - release the concurrency slot, so that once the deadline is gone the
+			//     unbounded 230 flush (a client that stopped reading) or a blocking
+			//     driver LoginSuccess cannot pin a pre-login slot indefinitely.
+			// Conn.Serve repeats both as an idempotent backstop.
+			conn.clearPreLoginDeadline()
+			conn.releaseHandshakeSlot()
 			conn.writeMessage(230, "Password ok, continue")
 			conn.driver.LoginSuccess(conn.user, permissions)
 			return
@@ -1287,14 +1297,14 @@ func (cmd commandSyst) Execute(conn *Conn, param string) {
 
 // commandType responds to the TYPE FTP command.
 //
-//  like the MODE and STRU commands, TYPE dates back to a time when the FTP
-//  protocol was more aware of the content of the files it was transferring, and
-//  would sometimes be expected to translate things like EOL markers on the fly.
+//	like the MODE and STRU commands, TYPE dates back to a time when the FTP
+//	protocol was more aware of the content of the files it was transferring, and
+//	would sometimes be expected to translate things like EOL markers on the fly.
 //
-//  Valid options were A(SCII), I(mage), E(BCDIC) or LN (for local type). Since
-//  we plan to just accept bytes from the client unchanged, I think Image mode is
-//  adequate. The RFC requires we accept ASCII mode however, so accept it, but
-//  ignore it.
+//	Valid options were A(SCII), I(mage), E(BCDIC) or LN (for local type). Since
+//	we plan to just accept bytes from the client unchanged, I think Image mode is
+//	adequate. The RFC requires we accept ASCII mode however, so accept it, but
+//	ignore it.
 type commandType struct{}
 
 func (cmd commandType) IsExtend() bool {

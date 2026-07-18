@@ -20,10 +20,19 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 const (
 	defaultWelcomeMessage = "Welcome to the Go FTP Server"
+
+	// maxCommandLine caps a single control-connection command line. FTP commands
+	// (incl. long paths) are short; without a cap, bufio.ReadString('\n') would
+	// grow an arbitrarily large buffer for a client that streams bytes without a
+	// newline — a cheap way to exhaust process memory. 8 KiB comfortably exceeds
+	// any legitimate command/path while bounding the allocation.
+	maxCommandLine = 8192
 )
 
 type Conn struct {
@@ -46,6 +55,34 @@ type Conn struct {
 	appendData    bool
 	closed        bool
 	tls           bool
+
+	// Overload guards (see ServerOpts.HandshakeTimeout / MaxConnections).
+	// handshakeTimeout bounds the pre-login phase; releaseSlot frees this
+	// connection's pre-login concurrency slot and is run at most once (on login
+	// or teardown, whichever comes first).
+	handshakeTimeout time.Duration
+	releaseSlot      func()
+	releaseOnce      sync.Once
+}
+
+// releaseHandshakeSlot frees the pre-login concurrency slot exactly once. Safe
+// to call when no limit is configured (releaseSlot is nil).
+func (conn *Conn) releaseHandshakeSlot() {
+	if conn.releaseSlot != nil {
+		conn.releaseOnce.Do(conn.releaseSlot)
+	}
+}
+
+// clearPreLoginDeadline removes the pre-login handshake deadline. It is called
+// the instant authentication succeeds — BEFORE the success response (e.g. FTP
+// 230) is written — so that a slow-but-successful login (one whose backend auth
+// took most of the deadline window) can still deliver its response instead of
+// having the write fail against an already-expired deadline. Idempotent.
+func (conn *Conn) clearPreLoginDeadline() {
+	if conn.handshakeTimeout > 0 {
+		_ = conn.conn.SetDeadline(time.Time{})
+		conn.handshakeTimeout = 0
+	}
 }
 
 func (conn *Conn) SessionID() string {
@@ -140,12 +177,28 @@ func (conn *Conn) Serve() {
 			conn.Close()
 		}
 	}()
+	// Free the pre-login slot on the way out, covering connections that
+	// disconnect before ever authenticating (it's a no-op if login already
+	// released it, or if no limit is configured).
+	defer conn.releaseHandshakeSlot()
+
+	// Bound the pre-login phase against a stalled (slowloris) client. We set BOTH
+	// the read and write deadline (SetDeadline, not SetReadDeadline): a client can
+	// otherwise send commands but never read our replies, filling the socket send
+	// buffer until writeMessage's Flush blocks forever — a write stall a read-only
+	// deadline can't interrupt, which would hold the pre-login slot indefinitely.
+	// Set on the raw control connection; it carries through an AUTH TLS upgrade
+	// (the deadline lives on the underlying socket) and is cleared on login below.
+	if conn.handshakeTimeout > 0 {
+		_ = conn.conn.SetDeadline(time.Now().Add(conn.handshakeTimeout))
+	}
+
 	conn.logger.Print(conn.sessionID, "Connection Established")
 	// send welcome
 	conn.writeMessage(220, conn.server.WelcomeMessage)
 	// read commands
 	for {
-		line, err := conn.controlReader.ReadString('\n')
+		line, err := conn.readCommandLine()
 		if err != nil {
 			if err != io.EOF {
 				conn.logger.Print(conn.sessionID, fmt.Sprint("read error:", err))
@@ -158,6 +211,15 @@ func (conn *Conn) Serve() {
 		// closed socket
 		if conn.closed == true {
 			break
+		}
+		// On successful login, leave the pre-login regime: drop the deadline (so
+		// an established session isn't bounded by it) and release the pre-login
+		// concurrency slot. The deadline is normally already cleared at the login
+		// point (see commandPass) so the 230 write isn't bounded; this is an
+		// idempotent backstop that also covers any other path that sets conn.user.
+		if conn.IsLogin() {
+			conn.clearPreLoginDeadline()
+			conn.releaseHandshakeSlot()
 		}
 	}
 	conn.Close()
@@ -217,6 +279,29 @@ func (conn *Conn) receiveLine(line string) {
 	}
 }
 
+// readCommandLine reads one command line from the control connection, bounded to
+// maxCommandLine bytes. It reads a byte at a time through the buffered
+// controlReader (cheap — the buffering is in bufio), so memory is capped as it
+// goes: a client that streams data without a newline hits the limit and gets an
+// error (the caller then tears the connection down) instead of growing an
+// unbounded buffer the way bufio.ReadString('\n') would.
+func (conn *Conn) readCommandLine() (string, error) {
+	var b strings.Builder
+	for {
+		c, err := conn.controlReader.ReadByte()
+		if err != nil {
+			return b.String(), err
+		}
+		b.WriteByte(c)
+		if c == '\n' {
+			return b.String(), nil
+		}
+		if b.Len() >= maxCommandLine {
+			return b.String(), fmt.Errorf("command line exceeds %d-byte limit", maxCommandLine)
+		}
+	}
+}
+
 func (conn *Conn) parseLine(line string) (string, string) {
 	params := strings.SplitN(strings.Trim(line, "\r\n"), " ", 2)
 	if len(params) == 1 {
@@ -246,16 +331,16 @@ func (conn *Conn) writeMessageMultiline(code int, message string) (wrote int, er
 // buildPath takes a client supplied path or filename and generates a safe
 // absolute path within their account sandbox.
 //
-//    buildpath("/")
-//    => "/"
-//    buildpath("one.txt")
-//    => "/one.txt"
-//    buildpath("/files/two.txt")
-//    => "/files/two.txt"
-//    buildpath("files/two.txt")
-//    => "/files/two.txt"
-//    buildpath("/../../../../etc/passwd")
-//    => "/etc/passwd"
+//	buildpath("/")
+//	=> "/"
+//	buildpath("one.txt")
+//	=> "/one.txt"
+//	buildpath("/files/two.txt")
+//	=> "/files/two.txt"
+//	buildpath("files/two.txt")
+//	=> "/files/two.txt"
+//	buildpath("/../../../../etc/passwd")
+//	=> "/etc/passwd"
 //
 // The driver implementation is responsible for deciding how to treat this path.
 // Obviously they MUST NOT just read the path off disk. The probably want to

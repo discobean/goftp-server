@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"net"
+	"runtime/debug"
 	"strconv"
+	"time"
 )
 
 // Version returns the library version
@@ -64,6 +66,23 @@ type ServerOpts struct {
 
 	// A logrus logger for logging authentication requests and more
 	LogrusEntry *logrus.Entry
+
+	// MaxConnections bounds the number of concurrent UN-AUTHENTICATED
+	// connections (those still in the pre-login command exchange). While
+	// saturated the accept loop stops accepting, so excess connections wait in
+	// the kernel backlog (backpressure). The slot is released the instant a
+	// connection logs in, so established/authenticated sessions are NOT counted
+	// against this limit. 0 (the default) means unlimited — existing behaviour.
+	// This stops a connection flood from spawning unbounded goroutines.
+	MaxConnections int
+
+	// HandshakeTimeout is the maximum time a connection may spend in the
+	// pre-login phase (from connect until it authenticates). A client that
+	// opens TCP and then stalls (slowloris) is dropped once it elapses, instead
+	// of parking a goroutine + socket forever. It is cleared on successful
+	// login, so it never bounds an authenticated session's idle time. 0 (the
+	// default) disables it — existing behaviour.
+	HandshakeTimeout time.Duration
 }
 
 // Server is the root of your FTP application. You should instantiate one
@@ -139,6 +158,9 @@ func serverOptsWithDefaults(opts *ServerOpts) *ServerOpts {
 	newOpts.PublicIp = opts.PublicIp
 	newOpts.PassivePorts = opts.PassivePorts
 
+	newOpts.MaxConnections = opts.MaxConnections
+	newOpts.HandshakeTimeout = opts.HandshakeTimeout
+
 	return &newOpts
 }
 
@@ -146,19 +168,18 @@ func serverOptsWithDefaults(opts *ServerOpts) *ServerOpts {
 // via an instance of ServerOpts. Calling this function in your code will
 // probably look something like this:
 //
-//     factory := &MyDriverFactory{}
-//     server  := server.NewServer(&server.ServerOpts{ Factory: factory })
+//	factory := &MyDriverFactory{}
+//	server  := server.NewServer(&server.ServerOpts{ Factory: factory })
 //
 // or:
 //
-//     factory := &MyDriverFactory{}
-//     opts    := &server.ServerOpts{
-//       Factory: factory,
-//       Port: 2000,
-//       Hostname: "127.0.0.1",
-//     }
-//     server  := server.NewServer(opts)
-//
+//	factory := &MyDriverFactory{}
+//	opts    := &server.ServerOpts{
+//	  Factory: factory,
+//	  Port: 2000,
+//	  Hostname: "127.0.0.1",
+//	}
+//	server  := server.NewServer(opts)
 func NewServer(opts *ServerOpts) *Server {
 	opts = serverOptsWithDefaults(opts)
 	s := new(Server)
@@ -188,6 +209,7 @@ func (server *Server) newConn(tcpConn net.Conn, driver Driver) *Conn {
 	c.logrusEntry = server.logrusEntry.WithField("source_ip", sourceIP)
 	c.tlsConfig = server.tlsConfig
 	c.tls = server.implicitTLS
+	c.handshakeTimeout = server.HandshakeTimeout
 
 	driver.Init(c)
 	return c
@@ -215,7 +237,6 @@ func simpleTLSConfig(certFile, keyFile string) (*tls.Config, error) {
 // If the server fails to start for any reason, an error will be returned. Common
 // errors are trying to bind to a privileged port or something else is already
 // listening on the same port.
-//
 func (server *Server) ListenAndServe() error {
 	var listener net.Listener
 	var err error
@@ -251,11 +272,19 @@ func (server *Server) ListenAndServe() error {
 
 // Serve accepts connections on a given net.Listener and handles each
 // request in a new goroutine.
-//
 func (server *Server) Serve(l net.Listener) error {
 	server.listener = l
 	server.ctx, server.cancel = context.WithCancel(context.Background())
 	sessionID := ""
+
+	// Bound concurrent un-authenticated connections. A slot is held only for the
+	// pre-login phase (released on login or close), so authenticated sessions
+	// don't count against it. nil semaphore ⇒ unlimited (default).
+	var sem chan struct{}
+	if server.MaxConnections > 0 {
+		sem = make(chan struct{}, server.MaxConnections)
+	}
+
 	for {
 		tcpConn, err := server.listener.Accept()
 		if err != nil {
@@ -270,14 +299,60 @@ func (server *Server) Serve(l net.Listener) error {
 			}
 			return err
 		}
-		driver, err := server.Factory.NewDriver()
-		if err != nil {
-			server.logger.Printf(sessionID, "Error creating driver, aborting client connection: %v", err)
-			tcpConn.Close()
-		} else {
-			ftpConn := server.newConn(tcpConn, driver)
-			go ftpConn.Serve()
+
+		// Backpressure: block until a pre-login slot is free. While blocked we
+		// don't Accept, so further connections queue in the kernel backlog.
+		if sem != nil {
+			select {
+			case sem <- struct{}{}:
+			case <-server.ctx.Done():
+				tcpConn.Close()
+				return ErrServerClosed
+			}
 		}
+
+		// Set up the connection and launch its handler. This runs in a closure so
+		// that a panic BEFORE Conn.Serve() takes ownership — e.g. in
+		// Factory.NewDriver or driver.Init (called by newConn) — is recovered
+		// here: it releases the pre-login slot and closes the conn instead of
+		// unwinding (and killing) the whole accept loop. Once go ftpConn.Serve()
+		// is launched, Serve owns the slot release and its own panic recovery.
+		func() {
+			launched := false
+			defer func() {
+				r := recover()
+				if !launched {
+					tcpConn.Close()
+					if sem != nil {
+						<-sem
+					}
+				}
+				if r != nil {
+					server.logger.Printf(sessionID, "recovered panic setting up connection: %v\n%s", r, debug.Stack())
+					// Preserve the historical fail-fast behaviour for consumers
+					// running WITHOUT the concurrency guard (sem == nil): with no
+					// slot to protect there is nothing to leak, so a setup panic
+					// propagates exactly as it did before this change. Only when the
+					// guard is active do we swallow it — having released the slot —
+					// to keep the accept loop alive under the guard's protection.
+					if sem == nil {
+						panic(r)
+					}
+				}
+			}()
+
+			driver, err := server.Factory.NewDriver()
+			if err != nil {
+				server.logger.Printf(sessionID, "Error creating driver, aborting client connection: %v", err)
+				return
+			}
+			ftpConn := server.newConn(tcpConn, driver)
+			if sem != nil {
+				ftpConn.releaseSlot = func() { <-sem }
+			}
+			go ftpConn.Serve()
+			launched = true
+		}()
 	}
 }
 
