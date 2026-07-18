@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-package server_test
+package server
 
 import (
 	"bufio"
@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/discobean/goftp-server"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,23 +22,23 @@ import (
 // and pre-login phase, so the file operations are never called.
 type mockDriver struct{}
 
-func (mockDriver) Init(*server.Conn) {}
-func (mockDriver) CheckUser(string) (bool, *server.Permissions, string, error) {
-	p := server.Permissions{}
+func (mockDriver) Init(*Conn) {}
+func (mockDriver) CheckUser(string) (bool, *Permissions, string, error) {
+	p := Permissions{}
 	return true, &p, "", nil
 }
-func (mockDriver) Login(string, *server.Permissions) (bool, *logrus.Entry, server.Logger, error) {
+func (mockDriver) Login(string, *Permissions) (bool, *logrus.Entry, Logger, error) {
 	return true, nil, nil, nil
 }
-func (mockDriver) LoginSuccess(string, *server.Permissions)          {}
-func (mockDriver) LoginFail(string, *server.Permissions)             {}
-func (mockDriver) Stat(string) (server.FileInfo, error)              { return nil, errors.New("not implemented") }
-func (mockDriver) ChangeDir(string) error                            { return nil }
-func (mockDriver) ListDir(string, func(server.FileInfo) error) error { return nil }
-func (mockDriver) DeleteDir(string) error                            { return nil }
-func (mockDriver) DeleteFile(string) error                           { return nil }
-func (mockDriver) Rename(string, string) error                       { return nil }
-func (mockDriver) MakeDir(string) error                              { return nil }
+func (mockDriver) LoginSuccess(string, *Permissions)          {}
+func (mockDriver) LoginFail(string, *Permissions)             {}
+func (mockDriver) Stat(string) (FileInfo, error)              { return nil, errors.New("not implemented") }
+func (mockDriver) ChangeDir(string) error                     { return nil }
+func (mockDriver) ListDir(string, func(FileInfo) error) error { return nil }
+func (mockDriver) DeleteDir(string) error                     { return nil }
+func (mockDriver) DeleteFile(string) error                    { return nil }
+func (mockDriver) Rename(string, string) error                { return nil }
+func (mockDriver) MakeDir(string) error                       { return nil }
 func (mockDriver) GetFile(string, int64) (int64, io.ReadCloser, error) {
 	return 0, nil, errors.New("not implemented")
 }
@@ -49,19 +48,19 @@ func (mockDriver) PutFile(string, io.Reader, bool) (int64, error) {
 
 type mockFactory struct{}
 
-func (mockFactory) NewDriver() (server.Driver, error) { return mockDriver{}, nil }
+func (mockFactory) NewDriver() (Driver, error) { return mockDriver{}, nil }
 
 // panicInitDriver panics in Init to exercise the accept-loop's panic recovery.
 type panicInitDriver struct{ mockDriver }
 
-func (panicInitDriver) Init(*server.Conn) { panic("boom in Init") }
+func (panicInitDriver) Init(*Conn) { panic("boom in Init") }
 
 // panicOnceFactory returns a driver that panics in Init on the first N
 // connections, then healthy drivers, so a test can prove the accept loop
 // survives the panic and still serves later connections.
 type panicOnceFactory struct{ remaining *int32 }
 
-func (f panicOnceFactory) NewDriver() (server.Driver, error) {
+func (f panicOnceFactory) NewDriver() (Driver, error) {
 	if atomic.AddInt32(f.remaining, -1) >= 0 {
 		return panicInitDriver{}, nil
 	}
@@ -76,11 +75,11 @@ type blockingLoginDriver struct {
 	block chan struct{}
 }
 
-func (d blockingLoginDriver) LoginSuccess(string, *server.Permissions) { <-d.block }
+func (d blockingLoginDriver) LoginSuccess(string, *Permissions) { <-d.block }
 
 type blockingLoginFactory struct{ block chan struct{} }
 
-func (f blockingLoginFactory) NewDriver() (server.Driver, error) {
+func (f blockingLoginFactory) NewDriver() (Driver, error) {
 	return blockingLoginDriver{block: f.block}, nil
 }
 
@@ -88,8 +87,8 @@ func (f blockingLoginFactory) NewDriver() (server.Driver, error) {
 // PASS handler dereferences it).
 type mockAuth struct{}
 
-func (mockAuth) CheckPasswd(name, pass string) (bool, *server.Permissions, error) {
-	p := server.Permissions{}
+func (mockAuth) CheckPasswd(name, pass string) (bool, *Permissions, error) {
+	p := Permissions{}
 	return name == "admin" && pass == "admin", &p, nil
 }
 
@@ -99,11 +98,11 @@ func (mockAuth) CheckPasswd(name, pass string) (bool, *server.Permissions, error
 // exercises the exact accept loop + Conn.Serve path the guards live in.
 func startOverloadServer(t *testing.T, maxConns int, handshakeTimeout time.Duration) (string, func()) {
 	t.Helper()
-	opt := &server.ServerOpts{
+	opt := &ServerOpts{
 		Name:             "overload test ftpd",
 		Factory:          mockFactory{},
 		Auth:             mockAuth{},
-		Logger:           new(server.DiscardLogger),
+		Logger:           new(DiscardLogger),
 		MaxConnections:   maxConns,
 		HandshakeTimeout: handshakeTimeout,
 	}
@@ -111,7 +110,7 @@ func startOverloadServer(t *testing.T, maxConns int, handshakeTimeout time.Durat
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	s := server.NewServer(opt)
+	s := NewServer(opt)
 	go func() { _ = s.Serve(ln) }()
 	return ln.Addr().String(), func() { _ = s.Shutdown() }
 }
@@ -245,18 +244,18 @@ func TestFTPSlotReleasedOnLogin(t *testing.T) {
 // ever be served.
 func TestFTPDriverInitPanicDoesNotLeakOrWedge(t *testing.T) {
 	remaining := int32(1) // first connection panics in Init, rest are healthy
-	opt := &server.ServerOpts{
+	opt := &ServerOpts{
 		Name:           "panic test ftpd",
 		Factory:        panicOnceFactory{remaining: &remaining},
 		Auth:           mockAuth{},
-		Logger:         new(server.DiscardLogger),
+		Logger:         new(DiscardLogger),
 		MaxConnections: 1,
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	s := server.NewServer(opt)
+	s := NewServer(opt)
 	go func() { _ = s.Serve(ln) }()
 	defer func() { _ = s.Shutdown() }()
 	addr := ln.Addr().String()
@@ -326,11 +325,11 @@ func TestFTPCommandLineLengthCapped(t *testing.T) {
 // did before the guard existed — it is only swallowed when the guard is active.
 func TestFTPSetupPanicPropagatesWhenGuardOff(t *testing.T) {
 	remaining := int32(1) // first connection panics in Init
-	opt := &server.ServerOpts{
+	opt := &ServerOpts{
 		Name:           "fail-fast test ftpd",
 		Factory:        panicOnceFactory{remaining: &remaining},
 		Auth:           mockAuth{},
-		Logger:         new(server.DiscardLogger),
+		Logger:         new(DiscardLogger),
 		MaxConnections: 0, // guard OFF
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -339,7 +338,7 @@ func TestFTPSetupPanicPropagatesWhenGuardOff(t *testing.T) {
 	}
 	defer ln.Close()
 
-	s := server.NewServer(opt)
+	s := NewServer(opt)
 	panicked := make(chan interface{}, 1)
 	go func() {
 		defer func() { panicked <- recover() }()
@@ -370,18 +369,18 @@ func TestFTPSlotReleasedBeforeLoginSuccess(t *testing.T) {
 	block := make(chan struct{})
 	defer close(block)
 
-	opt := &server.ServerOpts{
+	opt := &ServerOpts{
 		Name:           "blocking-loginsuccess ftpd",
 		Factory:        blockingLoginFactory{block: block},
 		Auth:           mockAuth{},
-		Logger:         new(server.DiscardLogger),
+		Logger:         new(DiscardLogger),
 		MaxConnections: 1,
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	s := server.NewServer(opt)
+	s := NewServer(opt)
 	go func() { _ = s.Serve(ln) }()
 	defer func() { _ = s.Shutdown() }()
 	addr := ln.Addr().String()
