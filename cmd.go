@@ -693,6 +693,24 @@ func (cmd commandPass) RequireAuth() bool {
 }
 
 func (cmd commandPass) Execute(conn *Conn, param string) {
+	// Bound failed login attempts per control connection, mirroring SSH's
+	// MaxAuthTries. goftp otherwise lets a client retry PASS until HandshakeTimeout,
+	// so a bad-login connection parks a MaxConnections slot for the full pre-login
+	// deadline — the dominant standing-slot load behind the prod health-check flaps.
+	// Any non-success return below leaves loggedIn=false; at the cap we 421 + close.
+	loggedIn := false
+	defer func() {
+		if loggedIn || conn.maxAuthTries <= 0 {
+			return
+		}
+		conn.authFailures++
+		if conn.authFailures >= conn.maxAuthTries {
+			conn.logrusEntry.WithField("attempts", conn.authFailures).Info("Too many failed login attempts; closing connection")
+			conn.writeMessage(421, "Too many failed login attempts")
+			conn.Close()
+		}
+	}()
+
 	invalidCredentials := "Invalid credentials"
 	checkUserOk, permissions, reasonNotOk, err := conn.driver.CheckUser(conn.reqUser)
 	permissionsFields := logrus.Fields{}
@@ -762,6 +780,7 @@ func (cmd commandPass) Execute(conn *Conn, param string) {
 			// Conn.Serve repeats both as an idempotent backstop.
 			conn.clearPreLoginDeadline()
 			conn.releaseHandshakeSlot()
+			loggedIn = true
 			conn.writeMessage(230, "Password ok, continue")
 			conn.driver.LoginSuccess(conn.user, permissions)
 			return
