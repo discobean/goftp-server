@@ -63,6 +63,11 @@ type Conn struct {
 	handshakeTimeout time.Duration
 	releaseSlot      func()
 	releaseOnce      sync.Once
+
+	// maxAuthTries bounds failed login attempts on this control connection
+	// (mirrors SSH MaxAuthTries); 0 disables it. authFailures counts them.
+	maxAuthTries int
+	authFailures int
 }
 
 // releaseHandshakeSlot frees the pre-login concurrency slot exactly once. Safe

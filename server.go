@@ -83,6 +83,15 @@ type ServerOpts struct {
 	// login, so it never bounds an authenticated session's idle time. 0 (the
 	// default) disables it — existing behaviour.
 	HandshakeTimeout time.Duration
+
+	// MaxAuthTries bounds the number of failed login attempts a single control
+	// connection may make before it is closed, mirroring SSH's MaxAuthTries.
+	// Without it goftp lets a client retry USER/PASS forever (until
+	// HandshakeTimeout elapses), so a bad-login connection parks a MaxConnections
+	// slot for the full pre-login deadline. After this many failed PASS attempts
+	// the server replies 421 and closes the control connection. 0 (the default)
+	// disables the cap — existing behaviour.
+	MaxAuthTries int
 }
 
 // Server is the root of your FTP application. You should instantiate one
@@ -160,6 +169,7 @@ func serverOptsWithDefaults(opts *ServerOpts) *ServerOpts {
 
 	newOpts.MaxConnections = opts.MaxConnections
 	newOpts.HandshakeTimeout = opts.HandshakeTimeout
+	newOpts.MaxAuthTries = opts.MaxAuthTries
 
 	return &newOpts
 }
@@ -210,6 +220,7 @@ func (server *Server) newConn(tcpConn net.Conn, driver Driver) *Conn {
 	c.tlsConfig = server.tlsConfig
 	c.tls = server.implicitTLS
 	c.handshakeTimeout = server.HandshakeTimeout
+	c.maxAuthTries = server.MaxAuthTries
 
 	driver.Init(c)
 	return c
